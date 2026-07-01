@@ -257,7 +257,11 @@ def main() -> None:
 
         if not args.watch:
             break
-        time.sleep(args.watch)
+        try:
+            time.sleep(args.watch)
+        except KeyboardInterrupt:
+            print()
+            break
 
 
 if __name__ == "__main__":
