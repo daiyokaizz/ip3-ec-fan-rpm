@@ -39,6 +39,16 @@ It does not:
 
 It only reads EC bytes.
 
+## License and commercial use
+
+This project is source-available, not OSI-open-source.
+
+Personal, educational, research, hobbyist, and other non-commercial use is allowed.
+
+Commercial use requires prior written permission from the copyright holder. This includes use by hardware vendors, OEMs, ODMs, cloud providers, system integrators, repair providers, managed service providers, enterprise IT operations, and commercial monitoring or support products.
+
+See `LICENSE` for details.
+
 ## Requirements
 
 Linux with:
@@ -205,4 +215,8 @@ Do not include serial numbers.
 
 ## License
 
-MIT
+This project is source-available for personal, educational, research, hobbyist, and other non-commercial use.
+
+Commercial use requires prior written permission from the copyright holder.
+
+See `LICENSE` for details.

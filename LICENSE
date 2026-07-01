@@ -1,21 +1,76 @@
-MIT License
+IP3 EC Fan RPM Source Available License v0.1
 
-Copyright (c) 2026
+Copyright (c) 2026 Rin N.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the Software), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any individual person
+obtaining a copy of this software and associated documentation files
+(the "Software"), to use, copy, modify, and share the Software for
+personal, educational, research, hobbyist, and other non-commercial
+purposes, subject to the conditions below.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Permitted Use
 
-THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+You may use the Software for:
+
+- personal device monitoring
+- home lab use
+- educational use
+- academic or independent research
+- evaluation and compatibility testing
+- non-commercial modification and redistribution
+
+2. Commercial Use Restriction
+
+Commercial use is not permitted without prior written permission from
+the copyright holder.
+
+For the purpose of this license, "Commercial Use" includes, but is not
+limited to:
+
+- use by or on behalf of a for-profit company
+- use in a commercial product, firmware, driver package, monitoring
+  product, management platform, support tool, or hardware bundle
+- use by an original equipment manufacturer, original design
+  manufacturer, hardware vendor, cloud provider, system integrator,
+  managed service provider, repair provider, or enterprise IT operation
+- offering the Software, modified versions of the Software, or outputs
+  derived from the Software as part of a paid service
+- using the Software to support, validate, test, sell, maintain, or
+  operate commercial hardware or commercial services
+
+3. Redistribution
+
+Redistribution is permitted only for non-commercial purposes.
+
+Redistributions must:
+
+- include this license text
+- preserve copyright notices
+- clearly identify any modifications
+- not imply endorsement by the original author
+
+4. No Circumvention
+
+You may not remove, bypass, obscure, or misrepresent this license or
+the Software's safety notices.
+
+You may not relicense the Software, or a modified version of the
+Software, under a more permissive license without prior written
+permission from the copyright holder.
+
+5. No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT,
+OR SAFETY.
+
+The Software interacts with low-level system interfaces. The author is
+not responsible for hardware damage, firmware issues, data loss,
+security issues, business interruption, or any other damages arising
+from use or misuse of the Software.
+
+6. Commercial Licensing
+
+Commercial licensing may be available by separate written agreement.
+

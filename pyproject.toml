@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Read-only fan RPM reader for IP3-style AMD mini PCs using ACPI EC registers"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = "LicenseRef-IP3-EC-Fan-RPM-Source-Available-0.1"
 authors = [
   { name = "maintainer" }
 ]
