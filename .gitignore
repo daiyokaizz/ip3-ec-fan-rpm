@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+.venv/
+.env
+
+build/
+dist/
+*.egg-info/
+src/*.egg-info/
+
+.DS_Store
+
+# ACPI / EC local dumps
+*.dat
+*.aml
+*.dsl
+ec_*.bin
+DSDT
+DSDT.dsl
+
+# Local test output
+*.prom
+*.jsonl
+*.json

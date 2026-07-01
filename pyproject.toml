@@ -1,0 +1,41 @@
+[project]
+name = "ip3-ec-fan-rpm"
+version = "0.1.0"
+description = "Read-only fan RPM reader for IP3-style AMD mini PCs using ACPI EC registers"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "maintainer" }
+]
+keywords = [
+  "linux",
+  "fan",
+  "rpm",
+  "ec",
+  "acpi",
+  "ip3",
+  "mini-pc",
+  "hwmon",
+  "prometheus"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: System :: Hardware",
+  "Topic :: System :: Monitoring"
+]
+
+[project.scripts]
+ip3-ec-fan-rpm = "ip3_ec_fan_rpm.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["ip3_ec_fan_rpm"]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
