@@ -24,3 +24,8 @@ DSDT.dsl
 *.prom
 *.jsonl
 *.json
+
+# Keep committed redacted examples
+!examples/
+!examples/sample-generic.json
+!examples/sample-generic.prom

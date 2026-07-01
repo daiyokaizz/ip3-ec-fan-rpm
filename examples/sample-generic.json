@@ -1,0 +1,58 @@
+{
+  "tool": "ip3-ec-fan-rpm",
+  "version": "0.1.0",
+  "mode": "read_only",
+  "safety": {
+    "writes_ec": false,
+    "requires_ec_write_support": false,
+    "controls_fan": false,
+    "changes_power_profile": false
+  },
+  "dmi": {
+    "sys_vendor": "redacted",
+    "product_name": "redacted",
+    "product_version": "redacted",
+    "board_vendor": "redacted",
+    "board_name": "redacted",
+    "bios_vendor": "redacted",
+    "bios_version": "redacted",
+    "bios_date": "redacted"
+  },
+  "signals": {
+    "ip3_power_switch": true,
+    "ip3_wmi_event": true,
+    "rwec_reg_wmi": true,
+    "wmi_guid_99d89064": true,
+    "wmi_guid_8fafc061": true,
+    "standard_hwmon_fan_available": false,
+    "ec_io_exists": true
+  },
+  "fan": {
+    "rpm_available": true,
+    "ec_io_path": "/sys/kernel/debug/ec/ec0/io",
+    "source": "acpi_ec",
+    "fan1_rpm": 1620,
+    "fan2_rpm": 0,
+    "fan1_available": true,
+    "fan2_available": false,
+    "mode": {
+      "fcmo_0x31": 0,
+      "fcmi_0x32": 0
+    },
+    "control_bytes_read_only": {
+      "fan1_0x33": 0,
+      "fan2_0x34": 0
+    },
+    "raw": {
+      "ec_0x35_fn1l": 6,
+      "ec_0x36_fn1h": 84,
+      "ec_0x37_fn2l": 0,
+      "ec_0x38_fn2h": 0,
+      "ec_0x31_0x38_hex": "00 00 00 00 06 54 00 00"
+    },
+    "formula": {
+      "fan1": "EC[0x36] + (EC[0x35] << 8)",
+      "fan2": "EC[0x38] + (EC[0x37] << 8)"
+    }
+  }
+}

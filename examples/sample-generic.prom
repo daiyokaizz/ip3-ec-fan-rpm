@@ -1,0 +1,17 @@
+# HELP ip3_ec_readable Whether EC fan registers are readable
+# TYPE ip3_ec_readable gauge
+ip3_ec_readable{vendor="redacted",product="redacted"} 1
+# HELP ip3_ec_signal_present Whether expected IP3 ACPI/WMI signals are present
+# TYPE ip3_ec_signal_present gauge
+ip3_ec_signal_present{vendor="redacted",product="redacted",signal="ip3_power_switch"} 1
+ip3_ec_signal_present{vendor="redacted",product="redacted",signal="ip3_wmi_event"} 1
+ip3_ec_signal_present{vendor="redacted",product="redacted",signal="rwec_reg_wmi"} 1
+ip3_ec_signal_present{vendor="redacted",product="redacted",signal="wmi_guid_99d89064"} 1
+ip3_ec_signal_present{vendor="redacted",product="redacted",signal="wmi_guid_8fafc061"} 1
+# HELP ip3_ec_standard_hwmon_fan_available Whether fan RPM is exposed through standard Linux hwmon
+# TYPE ip3_ec_standard_hwmon_fan_available gauge
+ip3_ec_standard_hwmon_fan_available{vendor="redacted",product="redacted"} 0
+# HELP ip3_ec_fan_rpm Fan RPM read from ACPI EC
+# TYPE ip3_ec_fan_rpm gauge
+ip3_ec_fan_rpm{vendor="redacted",product="redacted",fan="1",source="acpi_ec"} 1620
+ip3_ec_fan_rpm{vendor="redacted",product="redacted",fan="2",source="acpi_ec"} 0
