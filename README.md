@@ -86,6 +86,22 @@ This byte order follows the observed ACPI method, not the field names alone.
     . .venv/bin/activate
     pip install -e .
 
+## Go single-binary MVP quick start
+
+Build the Go MVP to a temporary path so the repository stays free of local binaries:
+
+    go build -o /tmp/ip3-ec-fan-rpm-go ./cmd/ip3-ec-fan-rpm
+
+Run it with read-only EC access:
+
+    sudo /tmp/ip3-ec-fan-rpm-go
+    sudo /tmp/ip3-ec-fan-rpm-go --json
+    sudo /tmp/ip3-ec-fan-rpm-go --prometheus
+
+For node_exporter textfile collection, pass an explicit collector path:
+
+    sudo /tmp/ip3-ec-fan-rpm-go --textfile /var/lib/node_exporter/textfile_collector/ip3_ec_fan.prom
+
 ## Usage
 
 Human-readable output:

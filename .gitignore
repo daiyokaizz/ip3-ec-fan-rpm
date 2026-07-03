@@ -29,3 +29,13 @@ DSDT.dsl
 !examples/
 !examples/sample-generic.json
 !examples/sample-generic.prom
+ip3-ec-fan-rpm-go
+*.ko
+*.o
+*.mod
+*.mod.c
+modules.order
+Module.symvers
+MOK.priv
+MOK.der
+!go.mod
