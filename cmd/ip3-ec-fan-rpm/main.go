@@ -31,6 +31,12 @@ const (
 	fanStateFanZeroTempUnknown      = "fan_zero_temp_unknown"
 )
 
+const (
+	controlTempSourcePreferred   = "preferred"
+	controlTempSourceFallbackMax = "fallback_max"
+	controlTempSourceUnavailable = "unavailable"
+)
+
 type DMIData struct {
 	SysVendor      *string `json:"sys_vendor"`
 	ProductName    *string `json:"product_name"`
@@ -99,9 +105,12 @@ type Safety struct {
 }
 
 type ThermalData struct {
-	Readable       bool    `json:"readable"`
-	SensorCount    int     `json:"sensor_count"`
-	MaxTempCelsius float64 `json:"max_temp_celsius"`
+	Readable            bool    `json:"readable"`
+	SensorCount         int     `json:"sensor_count"`
+	MaxTempCelsius      float64 `json:"max_temp_celsius"`
+	ControlTempReadable bool    `json:"control_temp_readable"`
+	ControlTempCelsius  float64 `json:"control_temp_celsius"`
+	ControlTempSource   string  `json:"control_temp_source"`
 }
 
 type FanStatus struct {
@@ -286,10 +295,12 @@ func parseMilliCelsius(s string) (float64, bool) {
 func collectThermalFromDir(root string) ThermalData {
 	matches, err := filepath.Glob(filepath.Join(root, "hwmon*", "temp*_input"))
 	if err != nil {
-		return ThermalData{}
+		return ThermalData{ControlTempSource: controlTempSourceUnavailable}
 	}
 
 	var thermal ThermalData
+	var preferredReadable bool
+	var preferredMax float64
 	for _, p := range matches {
 		data, err := os.ReadFile(p)
 		if err != nil {
@@ -304,8 +315,36 @@ func collectThermalFromDir(root string) ThermalData {
 			thermal.MaxTempCelsius = temp
 		}
 		thermal.Readable = true
+
+		chip := stringOr(readText(filepath.Join(filepath.Dir(p), "name")), "unknown")
+		if isPreferredControlChip(chip) {
+			if !preferredReadable || temp > preferredMax {
+				preferredMax = temp
+			}
+			preferredReadable = true
+		}
+	}
+	if preferredReadable {
+		thermal.ControlTempReadable = true
+		thermal.ControlTempCelsius = preferredMax
+		thermal.ControlTempSource = controlTempSourcePreferred
+	} else if thermal.Readable {
+		thermal.ControlTempReadable = true
+		thermal.ControlTempCelsius = thermal.MaxTempCelsius
+		thermal.ControlTempSource = controlTempSourceFallbackMax
+	} else {
+		thermal.ControlTempSource = controlTempSourceUnavailable
 	}
 	return thermal
+}
+
+func isPreferredControlChip(chip string) bool {
+	switch chip {
+	case "k10temp", "amdgpu", "acpitz":
+		return true
+	default:
+		return false
+	}
 }
 
 func collectThermal() ThermalData {
@@ -327,31 +366,31 @@ func evaluateFanStatus(f FanData, t ThermalData) FanStatus {
 			Reason:     "fan1_rpm > 0; instant sample only",
 		}
 	}
-	if !t.Readable {
+	if !t.ControlTempReadable {
 		return FanStatus{
 			Fan1State:  fanStateFanZeroTempUnknown,
 			ReasonCode: fanStateFanZeroTempUnknown,
 			Reason:     "fan1_rpm is 0 but thermal data is unavailable; instant sample only",
 		}
 	}
-	if t.MaxTempCelsius < fanStopTempC {
+	if t.ControlTempCelsius < fanStopTempC {
 		return FanStatus{
 			Fan1State:  fanStateFanStopLowTemp,
 			ReasonCode: fanStateFanStopLowTemp,
-			Reason:     "fan1_rpm is 0 and max_temp_celsius < 45; instant sample only",
+			Reason:     "fan1_rpm is 0 and control_temp_celsius < 45; instant sample only",
 		}
 	}
-	if t.MaxTempCelsius < fanCriticalTempC {
+	if t.ControlTempCelsius < fanCriticalTempC {
 		return FanStatus{
 			Fan1State:  fanStateSuspiciousZeroRPM,
 			ReasonCode: fanStateSuspiciousZeroRPM,
-			Reason:     "fan1_rpm is 0 and 45 <= max_temp_celsius < 65; instant sample only",
+			Reason:     "fan1_rpm is 0 and 45 <= control_temp_celsius < 65; instant sample only",
 		}
 	}
 	return FanStatus{
 		Fan1State:  fanStateCriticalZeroRPMHighTemp,
 		ReasonCode: fanStateCriticalZeroRPMHighTemp,
-		Reason:     "fan1_rpm is 0 and max_temp_celsius >= 65; instant sample only",
+		Reason:     "fan1_rpm is 0 and control_temp_celsius >= 65; instant sample only",
 	}
 }
 
@@ -427,6 +466,11 @@ func printHuman(s Snapshot) {
 		fmt.Printf("max temp: %.1f °C\n", s.Thermal.MaxTempCelsius)
 	} else {
 		fmt.Println("max temp: unavailable")
+	}
+	if s.Thermal.ControlTempReadable {
+		fmt.Printf("control temp: %.1f °C (%s)\n", s.Thermal.ControlTempCelsius, s.Thermal.ControlTempSource)
+	} else {
+		fmt.Println("control temp: unavailable")
 	}
 	fmt.Printf("fan1 status: %s\n", s.Status.Fan1State)
 }
@@ -509,6 +553,21 @@ func toPrometheus(s Snapshot) string {
 	b.WriteString("# HELP ip3_ec_max_temp_celsius Maximum readable hwmon temperature in Celsius\n")
 	b.WriteString("# TYPE ip3_ec_max_temp_celsius gauge\n")
 	fmt.Fprintf(&b, "ip3_ec_max_temp_celsius{%s} %.1f\n", baseLabels, s.Thermal.MaxTempCelsius)
+
+	source := prometheusEscape(s.Thermal.ControlTempSource)
+	b.WriteString("# HELP ip3_ec_control_temp_celsius Temperature used for fan status decisions in Celsius\n")
+	b.WriteString("# TYPE ip3_ec_control_temp_celsius gauge\n")
+	fmt.Fprintf(&b, "ip3_ec_control_temp_celsius{%s,source=\"%s\"} %.1f\n",
+		baseLabels, source, s.Thermal.ControlTempCelsius)
+
+	b.WriteString("# HELP ip3_ec_control_temp_readable Whether the fan status control temperature is readable\n")
+	b.WriteString("# TYPE ip3_ec_control_temp_readable gauge\n")
+	controlReadable := 0
+	if s.Thermal.ControlTempReadable {
+		controlReadable = 1
+	}
+	fmt.Fprintf(&b, "ip3_ec_control_temp_readable{%s,source=\"%s\"} %d\n",
+		baseLabels, source, controlReadable)
 
 	b.WriteString("# HELP ip3_ec_fan_status Temperature-aware fan1 status as a one-hot gauge\n")
 	b.WriteString("# TYPE ip3_ec_fan_status gauge\n")

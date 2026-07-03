@@ -45,24 +45,14 @@ func TestParseMilliCelsius(t *testing.T) {
 
 func TestCollectThermalFromDir(t *testing.T) {
 	dir := t.TempDir()
-	hwmon0 := filepath.Join(dir, "hwmon0")
-	hwmon1 := filepath.Join(dir, "hwmon1")
-	if err := os.MkdirAll(hwmon0, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(hwmon1, 0755); err != nil {
-		t.Fatal(err)
-	}
-	for path, value := range map[string]string{
-		filepath.Join(hwmon0, "temp1_input"): "42500\n",
-		filepath.Join(hwmon0, "temp2_input"): "-1000\n",
-		filepath.Join(hwmon1, "temp1_input"): "76000\n",
-		filepath.Join(hwmon1, "temp2_input"): "invalid\n",
-	} {
-		if err := os.WriteFile(path, []byte(value), 0644); err != nil {
-			t.Fatal(err)
-		}
-	}
+	writeHwmon(t, dir, 0, "k10temp", map[string]string{
+		"temp1_input": "42500\n",
+		"temp2_input": "-1000\n",
+	})
+	writeHwmon(t, dir, 1, "nvme", map[string]string{
+		"temp1_input": "76000\n",
+		"temp2_input": "invalid\n",
+	})
 
 	thermal := collectThermalFromDir(dir)
 	if !thermal.Readable {
@@ -73,6 +63,41 @@ func TestCollectThermalFromDir(t *testing.T) {
 	}
 	if thermal.MaxTempCelsius != 76.0 {
 		t.Fatalf("max temp = %v, want 76.0", thermal.MaxTempCelsius)
+	}
+	if !thermal.ControlTempReadable {
+		t.Fatal("control temp should be readable")
+	}
+	if thermal.ControlTempCelsius != 42.5 {
+		t.Fatalf("control temp = %v, want 42.5", thermal.ControlTempCelsius)
+	}
+	if thermal.ControlTempSource != controlTempSourcePreferred {
+		t.Fatalf("control source = %s, want preferred", thermal.ControlTempSource)
+	}
+}
+
+func TestCollectThermalFallbackToMax(t *testing.T) {
+	dir := t.TempDir()
+	writeHwmon(t, dir, 0, "nvme", map[string]string{"temp1_input": "52000\n"})
+
+	thermal := collectThermalFromDir(dir)
+	if !thermal.ControlTempReadable {
+		t.Fatal("control temp should fallback to max temp")
+	}
+	if thermal.ControlTempCelsius != 52.0 {
+		t.Fatalf("control temp = %v, want 52.0", thermal.ControlTempCelsius)
+	}
+	if thermal.ControlTempSource != controlTempSourceFallbackMax {
+		t.Fatalf("control source = %s, want fallback_max", thermal.ControlTempSource)
+	}
+}
+
+func TestCollectThermalUnavailable(t *testing.T) {
+	thermal := collectThermalFromDir(t.TempDir())
+	if thermal.Readable || thermal.ControlTempReadable {
+		t.Fatalf("thermal should be unreadable: %#v", thermal)
+	}
+	if thermal.ControlTempSource != controlTempSourceUnavailable {
+		t.Fatalf("control source = %s, want unavailable", thermal.ControlTempSource)
 	}
 }
 
@@ -102,19 +127,19 @@ func TestEvaluateFanStatus(t *testing.T) {
 		{
 			name:    "low temp stop",
 			fan:     FanData{Readable: true, RPMAvailable: true, Fan1RPM: 0},
-			thermal: ThermalData{Readable: true, MaxTempCelsius: 44.9},
+			thermal: ThermalData{Readable: true, MaxTempCelsius: 80.0, ControlTempReadable: true, ControlTempCelsius: 44.9},
 			want:    fanStateFanStopLowTemp,
 		},
 		{
 			name:    "suspicious zero",
 			fan:     FanData{Readable: true, RPMAvailable: true, Fan1RPM: 0},
-			thermal: ThermalData{Readable: true, MaxTempCelsius: 45.0},
+			thermal: ThermalData{Readable: true, ControlTempReadable: true, ControlTempCelsius: 45.0},
 			want:    fanStateSuspiciousZeroRPM,
 		},
 		{
 			name:    "critical zero",
 			fan:     FanData{Readable: true, RPMAvailable: true, Fan1RPM: 0},
-			thermal: ThermalData{Readable: true, MaxTempCelsius: 65.0},
+			thermal: ThermalData{Readable: true, ControlTempReadable: true, ControlTempCelsius: 65.0},
 			want:    fanStateCriticalZeroRPMHighTemp,
 		},
 	}
@@ -126,6 +151,10 @@ func TestEvaluateFanStatus(t *testing.T) {
 		}
 		if got.ReasonCode == "" || !strings.Contains(got.Reason, "instant sample only") {
 			t.Fatalf("%s reason is not stable and explicit: %#v", tt.name, got)
+		}
+		if tt.want != fanStateNormal && tt.want != fanStateUnreadable && tt.want != fanStateFanZeroTempUnknown &&
+			!strings.Contains(got.Reason, "control_temp_celsius") {
+			t.Fatalf("%s reason should mention control temp: %#v", tt.name, got)
 		}
 	}
 }
@@ -146,9 +175,12 @@ func TestFanStatusOneHot(t *testing.T) {
 		},
 		Fan: FanData{RPMAvailable: true, Fan1RPM: 0, Fan2RPM: 0},
 		Thermal: ThermalData{
-			Readable:       true,
-			SensorCount:    2,
-			MaxTempCelsius: 66.2,
+			Readable:            true,
+			SensorCount:         2,
+			MaxTempCelsius:      66.2,
+			ControlTempReadable: true,
+			ControlTempCelsius:  42.5,
+			ControlTempSource:   controlTempSourcePreferred,
 		},
 		Status: FanStatus{Fan1State: fanStateCriticalZeroRPMHighTemp},
 	}
@@ -164,8 +196,30 @@ func TestFanStatusOneHot(t *testing.T) {
 			t.Fatalf("missing one-hot line %q in:\n%s", line, prom)
 		}
 	}
+	if !strings.Contains(prom, `ip3_ec_control_temp_celsius{vendor="ven\"dor",product="prod\\uct",source="preferred"} 42.5`) {
+		t.Fatalf("missing control temp metric in:\n%s", prom)
+	}
+	if !strings.Contains(prom, `ip3_ec_control_temp_readable{vendor="ven\"dor",product="prod\\uct",source="preferred"} 1`) {
+		t.Fatalf("missing control temp readable metric in:\n%s", prom)
+	}
 }
 
 func strPtr(s string) *string {
 	return &s
+}
+
+func writeHwmon(t *testing.T, root string, idx int, name string, files map[string]string) {
+	t.Helper()
+	dir := filepath.Join(root, fmt.Sprintf("hwmon%d", idx))
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "name"), []byte(name+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for file, value := range files {
+		if err := os.WriteFile(filepath.Join(dir, file), []byte(value), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
