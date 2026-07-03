@@ -143,6 +143,22 @@ Human-readable output may look like:
 
 The second fan may report 0 if the system has only one EC-connected fan tachometer input.
 
+## Temperature-aware fan status
+
+The Go single-binary MVP also reads standard Linux hwmon temperature inputs and reports a temperature-aware fan1 status.
+
+`fan1_rpm=0` is an instant sample and should not be treated as a failure by itself. The status combines fan1 RPM with the maximum readable hwmon temperature:
+
+- below 45 degrees Celsius: `fan_stop_low_temp`
+- 45 to below 65 degrees Celsius: `suspicious_zero_rpm`
+- 65 degrees Celsius or higher: `critical_zero_rpm_high_temp`
+
+These thresholds are experimental and are only used to explain the current sample. For alerting, prefer a time window, for example:
+
+    max_over_time(ip3_ec_fan_rpm{fan="1"}[2m]) == 0
+    and
+    max_over_time(ip3_ec_max_temp_celsius[2m]) > 65
+
 ## Prometheus metrics
 
 Example Prometheus text output:
@@ -152,6 +168,10 @@ Example Prometheus text output:
     ip3_ec_standard_hwmon_fan_available{vendor="unknown",product="unknown"} 0
     ip3_ec_fan_rpm{vendor="unknown",product="unknown",fan="1",source="acpi_ec"} 1620
     ip3_ec_fan_rpm{vendor="unknown",product="unknown",fan="2",source="acpi_ec"} 0
+    ip3_ec_thermal_readable{vendor="unknown",product="unknown"} 1
+    ip3_ec_thermal_sensor_count{vendor="unknown",product="unknown"} 3
+    ip3_ec_max_temp_celsius{vendor="unknown",product="unknown"} 42.5
+    ip3_ec_fan_status{vendor="unknown",product="unknown",status="normal"} 1
 
 ## What this project is
 

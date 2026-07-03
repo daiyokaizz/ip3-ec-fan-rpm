@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -16,6 +17,18 @@ const (
 	acpiDevices = "/sys/bus/acpi/devices"
 	wmiDevices  = "/sys/bus/wmi/devices"
 	hwmonDir    = "/sys/class/hwmon"
+
+	fanStopTempC     = 45.0
+	fanCriticalTempC = 65.0
+)
+
+const (
+	fanStateUnreadable              = "unreadable"
+	fanStateNormal                  = "normal"
+	fanStateFanStopLowTemp          = "fan_stop_low_temp"
+	fanStateSuspiciousZeroRPM       = "suspicious_zero_rpm"
+	fanStateCriticalZeroRPMHighTemp = "critical_zero_rpm_high_temp"
+	fanStateFanZeroTempUnknown      = "fan_zero_temp_unknown"
 )
 
 type DMIData struct {
@@ -85,14 +98,28 @@ type Safety struct {
 	ChangesPowerProfile    bool `json:"changes_power_profile"`
 }
 
+type ThermalData struct {
+	Readable       bool    `json:"readable"`
+	SensorCount    int     `json:"sensor_count"`
+	MaxTempCelsius float64 `json:"max_temp_celsius"`
+}
+
+type FanStatus struct {
+	Fan1State  string `json:"fan1_state"`
+	ReasonCode string `json:"reason_code"`
+	Reason     string `json:"reason"`
+}
+
 type Snapshot struct {
-	Tool    string  `json:"tool"`
-	Version string  `json:"version"`
-	Mode    string  `json:"mode"`
-	Safety  Safety  `json:"safety"`
-	DMI     DMIData `json:"dmi"`
-	Signals Signals `json:"signals"`
-	Fan     FanData `json:"fan"`
+	Tool    string      `json:"tool"`
+	Version string      `json:"version"`
+	Mode    string      `json:"mode"`
+	Safety  Safety      `json:"safety"`
+	DMI     DMIData     `json:"dmi"`
+	Signals Signals     `json:"signals"`
+	Fan     FanData     `json:"fan"`
+	Thermal ThermalData `json:"thermal"`
+	Status  FanStatus   `json:"status"`
 }
 
 func readText(path string) *string {
@@ -163,6 +190,10 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
+func decodeFanRPM(highByte int, lowByte int) int {
+	return highByte + (lowByte << 8)
+}
+
 func readECFans() FanData {
 	base := FanData{ECIOPath: ecIOPath}
 
@@ -200,8 +231,8 @@ func readECFans() FanData {
 	fn2l := int(data[0x37])
 	fn2h := int(data[0x38])
 
-	fan1RPM := fn1h + (fn1l << 8)
-	fan2RPM := fn2h + (fn2l << 8)
+	fan1RPM := decodeFanRPM(fn1h, fn1l)
+	fan2RPM := decodeFanRPM(fn2h, fn2l)
 
 	hexParts := make([]string, 0, 8)
 	for i := 0x31; i <= 0x38; i++ {
@@ -236,7 +267,97 @@ func readECFans() FanData {
 	}
 }
 
+func parseMilliCelsius(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	milli, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, false
+	}
+	celsius := milli / 1000.0
+	if celsius <= 0 || celsius >= 130 {
+		return 0, false
+	}
+	return celsius, true
+}
+
+func collectThermalFromDir(root string) ThermalData {
+	matches, err := filepath.Glob(filepath.Join(root, "hwmon*", "temp*_input"))
+	if err != nil {
+		return ThermalData{}
+	}
+
+	var thermal ThermalData
+	for _, p := range matches {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		temp, ok := parseMilliCelsius(string(data))
+		if !ok {
+			continue
+		}
+		thermal.SensorCount++
+		if !thermal.Readable || temp > thermal.MaxTempCelsius {
+			thermal.MaxTempCelsius = temp
+		}
+		thermal.Readable = true
+	}
+	return thermal
+}
+
+func collectThermal() ThermalData {
+	return collectThermalFromDir(hwmonDir)
+}
+
+func evaluateFanStatus(f FanData, t ThermalData) FanStatus {
+	if !f.Readable || !f.RPMAvailable {
+		return FanStatus{
+			Fan1State:  fanStateUnreadable,
+			ReasonCode: fanStateUnreadable,
+			Reason:     "fan RPM is unreadable; instant sample only",
+		}
+	}
+	if f.Fan1RPM > 0 {
+		return FanStatus{
+			Fan1State:  fanStateNormal,
+			ReasonCode: fanStateNormal,
+			Reason:     "fan1_rpm > 0; instant sample only",
+		}
+	}
+	if !t.Readable {
+		return FanStatus{
+			Fan1State:  fanStateFanZeroTempUnknown,
+			ReasonCode: fanStateFanZeroTempUnknown,
+			Reason:     "fan1_rpm is 0 but thermal data is unavailable; instant sample only",
+		}
+	}
+	if t.MaxTempCelsius < fanStopTempC {
+		return FanStatus{
+			Fan1State:  fanStateFanStopLowTemp,
+			ReasonCode: fanStateFanStopLowTemp,
+			Reason:     "fan1_rpm is 0 and max_temp_celsius < 45; instant sample only",
+		}
+	}
+	if t.MaxTempCelsius < fanCriticalTempC {
+		return FanStatus{
+			Fan1State:  fanStateSuspiciousZeroRPM,
+			ReasonCode: fanStateSuspiciousZeroRPM,
+			Reason:     "fan1_rpm is 0 and 45 <= max_temp_celsius < 65; instant sample only",
+		}
+	}
+	return FanStatus{
+		Fan1State:  fanStateCriticalZeroRPMHighTemp,
+		ReasonCode: fanStateCriticalZeroRPMHighTemp,
+		Reason:     "fan1_rpm is 0 and max_temp_celsius >= 65; instant sample only",
+	}
+}
+
 func snapshot() Snapshot {
+	fan := readECFans()
+	thermal := collectThermal()
 	return Snapshot{
 		Tool:    "ip3-ec-fan-rpm",
 		Version: "0.1.0",
@@ -257,7 +378,9 @@ func snapshot() Snapshot {
 			StandardHwmonFanAvail: standardHwmonFanAvailable(),
 			ECIOExists:            fileExists(ecIOPath),
 		},
-		Fan: readECFans(),
+		Fan:     fan,
+		Thermal: thermal,
+		Status:  evaluateFanStatus(fan, thermal),
 	}
 }
 
@@ -300,6 +423,12 @@ func printHuman(s Snapshot) {
 		}
 		fmt.Printf("fan rpm unavailable: %s\n", errMsg)
 	}
+	if s.Thermal.Readable {
+		fmt.Printf("max temp: %.1f °C\n", s.Thermal.MaxTempCelsius)
+	} else {
+		fmt.Println("max temp: unavailable")
+	}
+	fmt.Printf("fan1 status: %s\n", s.Status.Fan1State)
 }
 
 func prometheusEscape(s string) string {
@@ -365,7 +494,45 @@ func toPrometheus(s Snapshot) string {
 			baseLabels, s.Fan.Fan2RPM)
 	}
 
+	b.WriteString("# HELP ip3_ec_thermal_readable Whether hwmon temperature data is readable\n")
+	b.WriteString("# TYPE ip3_ec_thermal_readable gauge\n")
+	thermReadable := 0
+	if s.Thermal.Readable {
+		thermReadable = 1
+	}
+	fmt.Fprintf(&b, "ip3_ec_thermal_readable{%s} %d\n", baseLabels, thermReadable)
+
+	b.WriteString("# HELP ip3_ec_thermal_sensor_count Number of valid hwmon temperature sensors read\n")
+	b.WriteString("# TYPE ip3_ec_thermal_sensor_count gauge\n")
+	fmt.Fprintf(&b, "ip3_ec_thermal_sensor_count{%s} %d\n", baseLabels, s.Thermal.SensorCount)
+
+	b.WriteString("# HELP ip3_ec_max_temp_celsius Maximum readable hwmon temperature in Celsius\n")
+	b.WriteString("# TYPE ip3_ec_max_temp_celsius gauge\n")
+	fmt.Fprintf(&b, "ip3_ec_max_temp_celsius{%s} %.1f\n", baseLabels, s.Thermal.MaxTempCelsius)
+
+	b.WriteString("# HELP ip3_ec_fan_status Temperature-aware fan1 status as a one-hot gauge\n")
+	b.WriteString("# TYPE ip3_ec_fan_status gauge\n")
+	for _, state := range fanStatusStates() {
+		v := 0
+		if s.Status.Fan1State == state {
+			v = 1
+		}
+		fmt.Fprintf(&b, "ip3_ec_fan_status{%s,status=\"%s\"} %d\n",
+			baseLabels, prometheusEscape(state), v)
+	}
+
 	return b.String()
+}
+
+func fanStatusStates() []string {
+	return []string{
+		fanStateUnreadable,
+		fanStateNormal,
+		fanStateFanStopLowTemp,
+		fanStateSuspiciousZeroRPM,
+		fanStateCriticalZeroRPMHighTemp,
+		fanStateFanZeroTempUnknown,
+	}
 }
 
 func toJSON(s Snapshot) (string, error) {
